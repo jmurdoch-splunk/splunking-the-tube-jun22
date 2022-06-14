@@ -1,6 +1,22 @@
 
 # encoding = utf-8
 
+#
+# Note:
+# This particular AOB input was written to:
+# - Determine valid London Underground routes
+# - Provide enough metadata for each stop 
+# - Make the data easy to work with (human)
+# - Make the data fast to work with (splunk)
+#
+# It was *not* written to:
+# - Reduce data volume (this can *increase* volume)
+# - Show the best way to prepare a multi-dimensional data set
+# - Showcase how to code
+#
+# Changes are welcome if they retain the values of the first 4 points
+#
+
 import os
 import sys
 import time
@@ -11,16 +27,18 @@ def validate_input(helper, definition):
     pass
 
 def collect_events(helper, ew):
+    # Get inputs
     opt_line_id = helper.get_arg('line_id')
     global_app_key = helper.get_global_setting("app_key")
     
+    # Build Request
     url = "https://api.tfl.gov.uk/Line/" + opt_line_id + "/Route/Sequence/all"
     method = "GET"
-    
     parameters = {}
     if global_app_key is None:
         parameters['app_key'] = global_app_key
     
+    # Issue request
     response = helper.send_http_request(url, method, parameters=parameters, payload=None, headers=None, cookies=None, verify=True, cert=None, timeout=None, use_proxy=False)
 
     data = response.json()
@@ -130,9 +148,11 @@ def collect_events(helper, ew):
             'destinationNaptanId': validRoutes[routeId]['destinationNaptanId'],
             'originNaptanId': validRoutes[routeId]['originNaptanId']
         }    
+        # for each station on this route
         for station in validRoutes[routeId]['stationSequence']:
             payload = dict(routeMeta)
             payload.update(station)
-            # write an event for each station on each route
+
+            # write an event to splunk for each station on each route
             event = helper.new_event(source=helper.get_input_type(), index=helper.get_output_index(), sourcetype=helper.get_sourcetype(), data=json.dumps(payload))
             ew.write_event(event)

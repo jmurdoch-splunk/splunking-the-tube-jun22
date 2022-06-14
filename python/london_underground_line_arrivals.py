@@ -22,20 +22,23 @@ def validate_input(helper, definition):
     pass
 
 def collect_events(helper, ew):
+    # Get inputs
     opt_lineids = helper.get_arg('lineids')
     global_app_key = helper.get_global_setting("app_key")
 
+    # Build the request
     url = "https://api.tfl.gov.uk/Line/" + opt_lineids + "/Arrivals"
     method = "GET"
-    
     parameters = {}
     if global_app_key is None:
         parameters['app_key'] = global_app_key
     
+    # Send the request
     response = helper.send_http_request(url, method, parameters=parameters, payload=None, headers=None, cookies=None, verify=True, cert=None, timeout=None, use_proxy=False)
     response.raise_for_status()
     data = response.json()
     
+    # Loop through each arrival and extract what we need
     # Note - platform changes result in DUPLICATE data
     for arrival in data:
         output = { 
@@ -57,6 +60,7 @@ def collect_events(helper, ew):
             "destinationNaptanId": arrival.get('destinationNaptanId', "unknown"),
             "destinationName": arrival.get('destinationName', "unknown")
         }
-            
+
+        # Write to Splunk
         event = helper.new_event(source=helper.get_input_type(), index=helper.get_output_index(), sourcetype=helper.get_sourcetype(), data=json.dumps(output))
         ew.write_event(event)

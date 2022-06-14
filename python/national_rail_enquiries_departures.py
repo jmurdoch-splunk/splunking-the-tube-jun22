@@ -12,12 +12,12 @@ def validate_input(helper, definition):
     pass
 
 def collect_events(helper, ew):
-    # cap is 5000 req/hour
+    # Bring in the options
     opt_station = helper.get_arg('station_id')
     opt_rows = helper.get_arg('number_of_results')
-
     global_api_token = helper.get_global_setting("api_token")
-    
+
+    # Build the XML SOAP request
     url = "https://lite.realtime.nationalrail.co.uk/OpenLDBWS/ldb6.asmx"
     method = "POST"
     headers = {
@@ -38,7 +38,7 @@ def collect_events(helper, ew):
   </SOAP-ENV:Body>
 </SOAP-ENV:Envelope>'''.format(token=global_api_token, rows=opt_rows, station=opt_station)
 
-    # The following examples send rest requests to some endpoint.
+    # Note - API cap is 5000 req/hour
     response = helper.send_http_request(url, method, parameters=None, payload=soapxml, headers=headers, cookies=None, verify=True, cert=None, timeout=None, use_proxy=False)
 
     # get response status code
@@ -46,11 +46,18 @@ def collect_events(helper, ew):
     # check the response status, if the status is not sucessful, raise requests.HTTPError
     # response.raise_for_status()
     
+    # Import the XML response into a ElementTree
     xmlroot = ET.fromstring(response.text)
+
+    # Namespace shortening
     ns = { 'x': 'http://thalesgroup.com/RTTI/2014-02-20/ldb/types' }
+
+    # Find the timestamp
     timestamp = xmlroot.find('.//x:generatedAt', ns).text
 
+    # For each service...
     for svc in xmlroot.findall('.//x:service', ns):
+        # Extract select departure detail
         departure = {
             'time': timestamp,
             'crs': opt_station,
@@ -62,8 +69,10 @@ def collect_events(helper, ew):
             'oper': svc.find('x:operator', ns).text 
         }
 
+        # Platform is omitted if undetermined - populate if found
         if svc.find('x:platform', ns) is not None:
             departure['plat'] = svc.find('x:platform', ns).text
 
+        # Write to Splunk
         event = helper.new_event(source=helper.get_input_type(), index=helper.get_output_index(), sourcetype=helper.get_sourcetype(), data=json.dumps(departure))
         ew.write_event(event)
